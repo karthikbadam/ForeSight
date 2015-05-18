@@ -1,4 +1,32 @@
-<fragment xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools" android:layout_width="match_parent"
-    android:layout_height="match_parent" android:id="@+id/streetmap" tools:context=".StreetActivity"
-    android:name="com.google.android.gms.maps.StreetViewPanoramaFragment" />
+
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="1dp">
+
+    <fragment xmlns:android="http://schemas.android.com/apk/res/android"
+        xmlns:tools="http://schemas.android.com/tools" android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:id="@+id/streetmap"
+        tools:context=".StreetActivity"
+        android:name="com.google.android.gms.maps.StreetViewPanoramaFragment"
+    />
+
+    <SearchView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:id="@+id/searchView"
+        android:layout_gravity="left|bottom"
+        android:queryHint="Food?"
+        android:background="@color/wallet_highlighted_text_holo_light"/>
+
+    <fragment
+        android:layout_width="147dp"
+        android:layout_height="183dp"
+        android:name="com.google.android.gms.maps.MapFragment"
+        android:id="@+id/normalmap"
+        android:layout_gravity="right|top" />
+
+
+</FrameLayout>

@@ -1,12 +1,10 @@
 package hdi.foresight;
 
 import android.content.Context;
-import android.location.Location;
-import android.location.LocationManager;
 import android.os.AsyncTask;
 import android.os.Bundle;
-import android.os.SystemClock;
 import android.support.v4.app.FragmentActivity;
+import android.text.TextUtils;
 import android.util.Log;
 
 import com.google.android.gms.common.api.GoogleApiClient;
@@ -21,38 +19,66 @@ import com.google.android.gms.location.places.PlaceFilter;
 import com.google.android.gms.location.places.PlaceLikelihood;
 import com.google.android.gms.location.places.PlaceLikelihoodBuffer;
 import com.google.android.gms.location.places.Places;
+import com.google.android.gms.maps.CameraUpdateFactory;
+import com.google.android.gms.maps.GoogleMap;
+import com.google.android.gms.maps.MapFragment;
+import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.OnStreetViewPanoramaReadyCallback;
 import com.google.android.gms.maps.StreetViewPanorama;
+import com.google.android.gms.maps.StreetViewPanorama.OnStreetViewPanoramaCameraChangeListener;
+import com.google.android.gms.maps.StreetViewPanorama.OnStreetViewPanoramaChangeListener;
 import com.google.android.gms.maps.StreetViewPanoramaFragment;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.LatLngBounds;
+import com.google.android.gms.maps.model.Marker;
+import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.gms.maps.model.StreetViewPanoramaCamera;
+import com.google.android.gms.maps.model.StreetViewPanoramaLocation;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 
-public class StreetActivity extends FragmentActivity implements OnStreetViewPanoramaReadyCallback, GoogleApiClient.ConnectionCallbacks {
+
+public class StreetActivity extends FragmentActivity implements OnStreetViewPanoramaReadyCallback, GoogleApiClient.ConnectionCallbacks, OnMapReadyCallback, OnStreetViewPanoramaChangeListener, OnStreetViewPanoramaCameraChangeListener {
 
     StreetViewPanoramaFragment mStreetView;
 
-    private static final LatLng SAN_FRAN = new LatLng(37.765927, -122.449972);
+    //private static final LatLng SAN_FRAN = new LatLng(37.765927, -122.449972);
 
-    private static final LatLng SYDNEY = new LatLng(-33.8, 151);
+    //private static final LatLng SYDNEY = new LatLng(-33.8, 151);
+
+    private static final LatLng COLLEGE_PARK = new LatLng(38.987565, -76.941398);
+
+    private static LatLng currentLocation = COLLEGE_PARK;
+
+    private static float currentOrientation = 0;
+
 
     private static final LatLngBounds BOUNDS_GREATER_SYDNEY = new LatLngBounds(
             new LatLng(-34.041458, 150.790100), new LatLng(-33.682247, 151.383362));
-
-    private static final LatLngBounds BOUNDS_SAN_FRAN = new LatLngBounds(
-            new LatLng(35.765927, -123.449972), new LatLng(38.765927, -123.449972));
+//
+//    private static final LatLngBounds BOUNDS_SAN_FRAN = new LatLngBounds(
+//            new LatLng(35.765927, -123.449972), new LatLng(38.765927, -123.449972));
 
 
     private GoogleApiClient mGoogleApiClient;
 
+    private MapFragment mapFragment;
+
     private static final String TAG = "PLACE FINDER";
+
     private Context context;
+
+    private MarkerOptions locationMarkerOptions = new MarkerOptions().position(COLLEGE_PARK).rotation(currentOrientation);
+
+    private Marker locationMarker;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -73,7 +99,30 @@ public class StreetActivity extends FragmentActivity implements OnStreetViewPano
         super.onStop();
     }
 
+    @Override
+    public void onMapReady(GoogleMap map) {
+        // Some buildings have indoor maps. Center the camera over
+        // the building, and a floor picker will automatically appear.
+        map.moveCamera(CameraUpdateFactory.newLatLngZoom(COLLEGE_PARK, 15));
+
+        // add marker
+        locationMarker = map.addMarker(locationMarkerOptions)
+                ;
+        ;
+    }
+
     private void setUpMapIfNeeded() {
+
+        if (mapFragment == null) {
+
+            mapFragment = (MapFragment) getFragmentManager()
+                    .findFragmentById(R.id.normalmap);
+
+            mapFragment.getMapAsync(this);
+
+        }
+
+
         if (mStreetView == null) {
 
             mStreetView =
@@ -81,8 +130,6 @@ public class StreetActivity extends FragmentActivity implements OnStreetViewPano
                             .findFragmentById(R.id.streetmap);
 
             mStreetView.getStreetViewPanoramaAsync(this);
-
-
 
         }
 
@@ -96,45 +143,63 @@ public class StreetActivity extends FragmentActivity implements OnStreetViewPano
                     .addConnectionCallbacks(this)
                     .build();
 
-
         }
 
         mGoogleApiClient.connect();
 
         context = this.getApplicationContext();
 
-//        Settings.Secure.putString(getContentResolver(),
-//                Settings.Secure.ALLOW_MOCK_LOCATION, "0");
     }
 
 
     @Override
     public void onStreetViewPanoramaReady(StreetViewPanorama panorama) {
 
-        panorama.setPosition(SYDNEY);
+        panorama.setPosition(COLLEGE_PARK);
+
+        panorama.setOnStreetViewPanoramaCameraChangeListener(this);
+
+        panorama.setOnStreetViewPanoramaChangeListener(this);
+
+        StreetViewPanoramaCamera camera = panorama.getPanoramaCamera();
+
+        Log.i(TAG, "ORIGINAL ORIENTATION" + camera.getOrientation());
+
+    }
+
+    @Override
+    public void onStreetViewPanoramaChange(StreetViewPanoramaLocation location) {
+
+        if (location != null) {
+
+            Log.i(TAG, "LOCATION CHANGED "+ location.position.latitude + ", "+ location.position.longitude );
+
+            currentLocation = new LatLng(location.position.latitude, location.position.longitude);
+
+            locationMarker.setPosition(currentLocation);
+
+        }
+    }
+
+    @Override
+    public void onStreetViewPanoramaCameraChange(StreetViewPanoramaCamera camera) {
+
+        Log.i(TAG, "ORIENTATION CHANGED" + camera.getOrientation());
+
+        currentOrientation = camera.getOrientation().bearing;
+
+        locationMarker.setRotation(currentOrientation);
 
     }
 
     @Override
     public void onConnected(Bundle bundle) {
 
-        String[] data = new String[1];
+//        String[] data = new String[1];
+//        data[0] = "check";
+//        new GetPlaceTask().execute(data);
 
-        data[0] = "check";
-
-        new GetPlaceTask().execute(data);
-
-
-        Location newLocation = new Location(LocationManager.GPS_PROVIDER);
-
-        newLocation.setLatitude(SYDNEY.latitude);
-        newLocation.setLongitude(SYDNEY.longitude);
-        newLocation.setProvider(LocationManager.GPS_PROVIDER);
-        newLocation.setAccuracy(1);
-        newLocation.setTime(new Date().getTime());
-        newLocation.setElapsedRealtimeNanos(SystemClock.elapsedRealtimeNanos());
-
-        //LocationServices.FusedLocationApi.setMockLocation(mGoogleApiClient, newLocation);
+        new GetYelpData().execute();
 
     }
 
@@ -142,6 +207,53 @@ public class StreetActivity extends FragmentActivity implements OnStreetViewPano
     public void onConnectionSuspended(int i) {
 
     }
+
+
+    // Getting a list from Yelp API
+    private class GetYelpData extends AsyncTask<Void, Void, String> {
+
+        @Override
+        protected String doInBackground(Void... data) {
+
+            Yelp yelp = Yelp.getYelp(StreetActivity.this);
+
+            String businesses = yelp.search("food", currentLocation.latitude, currentLocation.longitude);
+
+            try {
+
+                return processJson(businesses);
+
+            } catch (JSONException e) {
+
+                return businesses;
+
+            }
+        }
+
+        @Override
+        protected void onPostExecute(String result) {
+
+            //mSearchResultsText.setText(result);
+            Log.i(TAG, result);
+
+            setProgressBarIndeterminateVisibility(false);
+
+        }
+    }
+
+    String processJson(String jsonStuff) throws JSONException {
+
+        JSONObject json = new JSONObject(jsonStuff);
+        JSONArray businesses = json.getJSONArray("businesses");
+        ArrayList<String> businessNames = new ArrayList<String>(businesses.length());
+        for (int i = 0; i < businesses.length(); i++) {
+            JSONObject business = businesses.getJSONObject(i);
+            businessNames.add(business.getString("name"));
+        }
+        return TextUtils.join("\n", businessNames);
+
+    }
+
 
 
 
