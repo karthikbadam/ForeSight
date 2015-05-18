@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">ForeSight</string>
+    <string name="title_activity_street">Map</string>
+    <string name="consumer_key">6XyUTZgTDi68gjn5rDb2Cw</string>
+    <string name="consumer_secret">vczAHkeRh7mXaa0An4BwhE-Y9wU</string>
+    <string name="token">1QQPP8BbtvPt28hVJnB2imGOaW3Bq6KW</string>
+    <string name="token_secret">3XGkc-8-xub_4N1wNALySKkCC0g</string>
+</resources>
