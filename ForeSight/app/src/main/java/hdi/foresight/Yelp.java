@@ -53,6 +53,7 @@ public class Yelp {
     OAuthRequest request = new OAuthRequest(Verb.GET, "http://api.yelp.com/v2/search");
     request.addQuerystringParameter("term", term);
     request.addQuerystringParameter("ll", latitude + "," + longitude);
+    request.addQuerystringParameter("radius_filter", "1000");
     this.service.signRequest(this.accessToken, request);
     Response response = request.send();
     return response.getBody();
@@ -71,19 +72,5 @@ public class Yelp {
     this.service.signRequest(this.accessToken, request);
     Response response = request.send();
     return response.getBody();
-  }
-
-  // CLI
-  public static void main(String[] args) {
-    // Update tokens here from Yelp developers site, Manage API access.
-    String consumerKey = "";
-    String consumerSecret = "";
-    String token = "";
-    String tokenSecret = "";
-
-    Yelp yelp = new Yelp(consumerKey, consumerSecret, token, tokenSecret);
-    String response = yelp.search("burritos", 30.361471, -87.164326);
-
-    System.out.println(response);
   }
 }

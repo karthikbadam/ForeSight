@@ -28,5 +28,12 @@
         android:id="@+id/normalmap"
         android:layout_gravity="right|top" />
 
+    <LinearLayout
+        android:layout_width="258dp"
+        android:layout_height="61dp"
+        android:orientation="horizontal"
+        android:id="@+id/debugconsole"
+        android:layout_gravity="left|top"></LinearLayout>
+
 
 </FrameLayout>

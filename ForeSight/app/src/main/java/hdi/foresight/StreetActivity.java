@@ -1,11 +1,21 @@
 package hdi.foresight;
 
+import android.annotation.SuppressLint;
+import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothServerSocket;
+import android.bluetooth.BluetoothSocket;
 import android.content.Context;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.support.v4.app.FragmentActivity;
 import android.text.TextUtils;
 import android.util.Log;
+import android.view.View;
+import android.widget.LinearLayout;
 
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.common.api.PendingResult;
@@ -28,6 +38,7 @@ import com.google.android.gms.maps.StreetViewPanorama;
 import com.google.android.gms.maps.StreetViewPanorama.OnStreetViewPanoramaCameraChangeListener;
 import com.google.android.gms.maps.StreetViewPanorama.OnStreetViewPanoramaChangeListener;
 import com.google.android.gms.maps.StreetViewPanoramaFragment;
+import com.google.android.gms.maps.model.CircleOptions;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.LatLngBounds;
 import com.google.android.gms.maps.model.Marker;
@@ -39,9 +50,18 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 
@@ -56,17 +76,15 @@ public class StreetActivity extends FragmentActivity implements OnStreetViewPano
 
     private static final LatLng COLLEGE_PARK = new LatLng(38.987565, -76.941398);
 
-    private static LatLng currentLocation = COLLEGE_PARK;
+    private static final LatLng DC = new LatLng(38.900349, -77.044812);
+
+    private static LatLng currentLocation = DC;
 
     private static float currentOrientation = 0;
 
 
     private static final LatLngBounds BOUNDS_GREATER_SYDNEY = new LatLngBounds(
             new LatLng(-34.041458, 150.790100), new LatLng(-33.682247, 151.383362));
-//
-//    private static final LatLngBounds BOUNDS_SAN_FRAN = new LatLngBounds(
-//            new LatLng(35.765927, -123.449972), new LatLng(38.765927, -123.449972));
-
 
     private GoogleApiClient mGoogleApiClient;
 
@@ -76,21 +94,179 @@ public class StreetActivity extends FragmentActivity implements OnStreetViewPano
 
     private Context context;
 
-    private MarkerOptions locationMarkerOptions = new MarkerOptions().position(COLLEGE_PARK).rotation(currentOrientation);
+    private MarkerOptions locationMarkerOptions = new MarkerOptions().position(DC).rotation(currentOrientation);
 
     private Marker locationMarker;
+
+    private HashMap<String, LatLng> mCache = new HashMap<String, LatLng>();
+
+    private LinearLayout debugLayout;
+
+    private DebugCanvas debugCanvas;
+
+
+    // thread for bluetooth message passing
+    RemoteClientThread bluetoothThread;
+
+    // Data to be passed
+
+    private int leftCount = 1;
+    private int rightCount = 1;
+    private int frontCount = 1;
+
+    private float leftDistance = (float) 0.5;
+    private float rightDistance = (float) 0.5;
+    private float frontDistance = (float) 0.5;
+
+    private int connectionTrials = 0;
+    long startTrialTime = 0;
+
+    public class RemoteClientThread extends Thread{
+        public RemoteClientThread(){
+
+        }
+
+        long prevTime = -1;
+
+        @SuppressLint("NewApi")
+        public void run(){
+
+            startTrialTime = System.currentTimeMillis();
+
+            if(arduinoDev!=null){
+                while(running){
+                    try{
+                        if(remoteConnected){
+                            if(remoteSocket!=null){
+                                if(!remoteSocket.isConnected()){
+                                    remoteConnected = false;
+                                    continue;
+                                }
+
+                                String msg = leftCount + "," + rightCount + "," + frontCount;
+                                remoteOutStream.write(msg.getBytes("UTF-8"));
+                                remoteOutStream.flush();
+                                //remoteOutStream.write((byte) 0);
+                                //remoteOutStream.flush();
+
+                                Log.i("BLUETOOTH TAG", "Data sent...");
+
+                                debugCanvas.postInvalidate();
+
+//                                leftCount = (leftCount + 1)%10;
+//                                rightCount = (leftCount + 3)%10;
+//                                frontCount = (leftCount + 2)%10;
+
+                                Thread.sleep(3000);
+                            }
+
+                        } else {
+
+                            //if(remoteSocket!=null) remoteSocket.close();
+                            remoteSocket = arduinoDev.createRfcommSocketToServiceRecord(UUID.fromString(MY_UUID_REMOTE));
+                            bluetoothStatus = "Waiting..." + connectionTrials;
+                            connectionTrials++;
+
+                            Log.i("BLUETOOTH TAG", "Waiting...");
+
+                            debugCanvas.postInvalidate();
+                            remoteSocket.connect();
+
+                            if(remoteSocket.isConnected()){
+                                bluetoothStatus = "Connected!!";
+                                remoteInStream = remoteSocket.getInputStream();
+                                remoteOutStream = remoteSocket.getOutputStream();
+                                br_remote = new BufferedReader(new InputStreamReader(remoteInStream));
+                                bw_remote = new BufferedWriter(new OutputStreamWriter(remoteOutStream));
+                                remoteConnected = true;
+                                connectionTrials = 0;
+                            }
+                        }
+                        debugCanvas.postInvalidate();
+
+                    } catch (Exception e){
+                        e.printStackTrace();
+                        //remoteConnected = false;
+                    }
+                }
+            } else {
+                bluetoothStatus = "no device detected";
+                debugCanvas.postInvalidate();
+            }
+        }
+
+        public boolean running = true;
+        public void stopRun(){
+
+        }
+    }
+
+
+    class DebugCanvas extends View {
+
+        Paint bgPaint = new Paint();
+        Paint msgPaint = new Paint();
+
+        public DebugCanvas(Context context) {
+            super(context);
+
+            bgPaint.setColor(Color.TRANSPARENT);
+            msgPaint.setColor(Color.BLACK);
+            msgPaint.setTextSize(70);
+        }
+
+        public void onDraw(Canvas canvas){
+
+            canvas.drawRect(0, 0, 900, 470, bgPaint);
+
+            canvas.drawText("BTC:", 100, 60, msgPaint);
+            canvas.drawText(bluetoothStatus, 300, 60, msgPaint);
+
+            canvas.drawText("MSG:", 100, 150, msgPaint);
+            canvas.drawText("[L] " + leftCount + " [R] " + rightCount + " [F] " + frontCount, 300, 150, msgPaint);
+
+        }
+    }
+
+    // bluetooth adapter
+    private BluetoothAdapter mBluetoothAdapter;
+
+    private BluetoothDevice arduinoDev;
+
+    private BluetoothServerSocket remoteServerSocket;
+
+    private BluetoothSocket remoteSocket = null;
+
+    private InputStream remoteInStream;
+
+    OutputStream remoteOutStream;
+
+    BufferedWriter bw_remote;
+
+    BufferedReader br_remote;
+
+    String MY_UUID_REMOTE = "00001101-0000-1000-8000-00805f9b34fb";
+
+    boolean remoteConnected = false;
+
+    String bluetoothStatus = "NC";
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_street);
         setUpMapIfNeeded();
+
+        // set up bluetooth
+        setUpBluetoothIfNeeded();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
         setUpMapIfNeeded();
+        setUpBluetoothIfNeeded();
     }
 
     @Override
@@ -99,16 +275,44 @@ public class StreetActivity extends FragmentActivity implements OnStreetViewPano
         super.onStop();
     }
 
+    public void setUpBluetoothIfNeeded() {
+
+        if (debugLayout == null) {
+
+            debugLayout = (LinearLayout) findViewById(R.id.debugconsole);
+            debugCanvas = new DebugCanvas(this);
+
+            debugLayout.addView(debugCanvas);
+        }
+
+        //if (mBluetoothAdapter == null) {
+
+            mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+            Set<BluetoothDevice> pairedDevices = mBluetoothAdapter.getBondedDevices();
+            // If there are paired devices
+            if (pairedDevices.size() > 0) {
+                // Loop through paired devices
+                for (BluetoothDevice device : pairedDevices) {
+                    String deviceName = device.getName();
+                    if (deviceName.startsWith("RNBT")) arduinoDev = device;
+                }
+            }
+
+            bluetoothThread = new RemoteClientThread();
+            bluetoothThread.start();
+
+        //}
+
+    }
+
     @Override
     public void onMapReady(GoogleMap map) {
         // Some buildings have indoor maps. Center the camera over
         // the building, and a floor picker will automatically appear.
-        map.moveCamera(CameraUpdateFactory.newLatLngZoom(COLLEGE_PARK, 15));
+        map.moveCamera(CameraUpdateFactory.newLatLngZoom(DC, 14));
 
         // add marker
-        locationMarker = map.addMarker(locationMarkerOptions)
-                ;
-        ;
+        locationMarker = map.addMarker(locationMarkerOptions);
     }
 
     private void setUpMapIfNeeded() {
@@ -155,7 +359,7 @@ public class StreetActivity extends FragmentActivity implements OnStreetViewPano
     @Override
     public void onStreetViewPanoramaReady(StreetViewPanorama panorama) {
 
-        panorama.setPosition(COLLEGE_PARK);
+        panorama.setPosition(DC);
 
         panorama.setOnStreetViewPanoramaCameraChangeListener(this);
 
@@ -176,7 +380,9 @@ public class StreetActivity extends FragmentActivity implements OnStreetViewPano
 
             currentLocation = new LatLng(location.position.latitude, location.position.longitude);
 
-            locationMarker.setPosition(currentLocation);
+            new GetYelpData().execute();
+
+            //redrawMap();
 
         }
     }
@@ -209,6 +415,33 @@ public class StreetActivity extends FragmentActivity implements OnStreetViewPano
     }
 
 
+    public void redrawMap () {
+
+        GoogleMap map = mapFragment.getMap();
+
+        map.clear();
+
+        locationMarker = map.addMarker(locationMarkerOptions);
+
+        locationMarker.setPosition(currentLocation);
+
+        locationMarker.setRotation(currentOrientation);
+
+        Set<String> n = mCache.keySet();
+
+        Iterator<String> it = n.iterator();
+
+        while (it.hasNext()) {
+
+            String name = it.next();
+
+            LatLng l = mCache.get(name);
+
+            map.addCircle(new CircleOptions().center(l).fillColor(Color.DKGRAY).strokeColor(Color.DKGRAY)).setRadius(10);
+
+        }
+    }
+
     // Getting a list from Yelp API
     private class GetYelpData extends AsyncTask<Void, Void, String> {
 
@@ -236,6 +469,12 @@ public class StreetActivity extends FragmentActivity implements OnStreetViewPano
             //mSearchResultsText.setText(result);
             Log.i(TAG, result);
 
+            StreetActivity.this.runOnUiThread(new Runnable() {
+                public void run() {
+                    redrawMap();
+                }
+            });
+
             setProgressBarIndeterminateVisibility(false);
 
         }
@@ -245,13 +484,111 @@ public class StreetActivity extends FragmentActivity implements OnStreetViewPano
 
         JSONObject json = new JSONObject(jsonStuff);
         JSONArray businesses = json.getJSONArray("businesses");
+
+
         ArrayList<String> businessNames = new ArrayList<String>(businesses.length());
+
+        mCache.clear();
+
+        leftCount = 0;
+        rightCount = 0;
+        frontCount = 0;
+
         for (int i = 0; i < businesses.length(); i++) {
+
             JSONObject business = businesses.getJSONObject(i);
+
+            String businessName = business.getString("name");
+
             businessNames.add(business.getString("name"));
+
+            JSONObject location = business.getJSONObject("location").getJSONObject("coordinate");
+
+            if (location != null) {
+
+                float lat = Float.parseFloat(location.getString("latitude"));
+                float lon = Float.parseFloat(location.getString("longitude"));
+
+                LatLng hotelLocation = new LatLng(lat, lon);
+
+                double angle = findAngle (currentLocation, hotelLocation);
+
+                Log.i(TAG, "FOUND: " + businessName +  ", " + angle);
+
+                mCache.put(businessName, hotelLocation);
+
+                // left front right calculation
+
+                if ( (angle > currentOrientation && angle < currentOrientation + 45) || (angle > currentOrientation - 45 && angle < currentOrientation)) {
+                    //front
+                    frontCount++;
+                }
+
+                if (angle > currentOrientation + 45 && angle < currentOrientation + 120) {
+                    //right
+                    rightCount++;
+                }
+
+                if (angle > currentOrientation + 180 && angle < currentOrientation + 255) {
+                    //left
+                    leftCount++;
+                }
+
+            }
+
+            debugCanvas.postInvalidate();
+
         }
+
         return TextUtils.join("\n", businessNames);
 
+    }
+
+
+    double findDistance (LatLng source, LatLng destination) {
+
+        double R = 3963.1676;
+
+        //Source
+        double lat1 = source.latitude;
+        double lng1 = source.longitude;
+
+        // destination
+        double lat2 = destination.latitude;
+        double lng2 = destination.longitude;
+
+        double dLon = lng2 - lng1;
+        double dLat = lat2 - lat1;
+
+        double a =
+                Math.sin(dLat/2) * Math.sin(dLat/2) +
+                        Math.cos(lat1) * Math.cos(lat2) *
+                                Math.sin(dLon/2) * Math.sin(dLon/2);
+
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        double d = R * c;
+
+        return d; // Distance in miles
+    }
+
+    double findAngle (LatLng source, LatLng destination) {
+
+        //Source
+        double lat1 = source.latitude;
+        double lng1 = source.longitude;
+
+        // destination
+        double lat2 = destination.latitude;
+        double lng2 = destination.longitude;
+
+        double dLon = (lng2-lng1);
+        double y = Math.sin(dLon) * Math.cos(lat2);
+        double x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+
+        double brng = Math.toDegrees((Math.atan2(y, x)));
+        brng = (360 - ((brng + 360) % 360));
+
+        return brng;
     }
 
 
