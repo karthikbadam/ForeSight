@@ -2,6 +2,8 @@
 
 <img src="https://github.com/karthikbadam/ForeSight/blob/master/images/sg1.jpg">
 
+<img src="https://github.com/karthikbadam/ForeSight/blob/master/images/sg7.jpg">
+
 Spider Guider is a leg-worn haptic strap that can guide you to a location of interest. It consists of three columns of vibration motors (3 motors per column) for feedback in left, right, and forward directions. We created an Android application that tracks the user's GPS location (or virtual movement on a street view), queries Yelp API to get locations of nearest restaurants, and passes the restaurant information to the Arduino on the wearable using Bluetooth. Based on the number of motors that are buzzing (mapped to number of restaurants in each direction), and how many times they are buzzing (mapped to proximity of the restaurants), you can decide which way to go. 
 
 We worked on this as a final project for a [tangible interaction and
