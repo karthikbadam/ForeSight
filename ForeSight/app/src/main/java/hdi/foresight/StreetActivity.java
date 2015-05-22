@@ -1,3 +1,6 @@
+// Created by Karthik Badam and Brian Brubach for Spider Guider project https://www.youtube.com/watch?v=VcG2PZIfTJU
+// Writeup: http://cmsc838f-s15.wikispaces.com/Spider+Guider
+
 package hdi.foresight;
 
 import android.annotation.SuppressLint;
@@ -114,9 +117,9 @@ public class StreetActivity extends FragmentActivity implements OnStreetViewPano
     private int rightCount = 1;
     private int frontCount = 1;
 
-    private float leftDistance = (float) 0.5;
-    private float rightDistance = (float) 0.5;
-    private float frontDistance = (float) 0.5;
+    private int leftDistance = (int) 0;
+    private int rightDistance = (int) 0;
+    private int frontDistance = (int) 0;
 
     private int connectionTrials = 0;
     long startTrialTime = 0;
@@ -143,19 +146,20 @@ public class StreetActivity extends FragmentActivity implements OnStreetViewPano
                                     continue;
                                 }
 
-                                String msg = leftCount + "," + rightCount + "," + frontCount;
+                                //String msg = leftCount + "," + rightCount + "," + frontCount;
+
+
+                                String msg = (leftCount) + "," + (rightCount) + "," + (frontCount) + "," + leftDistance + "," + rightDistance + "," + frontDistance;
                                 remoteOutStream.write(msg.getBytes("UTF-8"));
                                 remoteOutStream.flush();
+
+
                                 //remoteOutStream.write((byte) 0);
                                 //remoteOutStream.flush();
 
                                 Log.i("BLUETOOTH TAG", "Data sent...");
 
                                 debugCanvas.postInvalidate();
-
-//                                leftCount = (leftCount + 1)%10;
-//                                rightCount = (leftCount + 3)%10;
-//                                frontCount = (leftCount + 2)%10;
 
                                 Thread.sleep(3000);
                             }
@@ -225,6 +229,9 @@ public class StreetActivity extends FragmentActivity implements OnStreetViewPano
             canvas.drawText("MSG:", 100, 150, msgPaint);
             canvas.drawText("[L] " + leftCount + " [R] " + rightCount + " [F] " + frontCount, 300, 150, msgPaint);
 
+            canvas.drawText("MSG:", 100, 230, msgPaint);
+            canvas.drawText("[L] " + leftDistance + " [R] " + rightDistance + " [F] " + frontDistance, 300, 230, msgPaint);
+
         }
     }
 
@@ -285,7 +292,7 @@ public class StreetActivity extends FragmentActivity implements OnStreetViewPano
             debugLayout.addView(debugCanvas);
         }
 
-        //if (mBluetoothAdapter == null) {
+        if (mBluetoothAdapter == null) {
 
             mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
             Set<BluetoothDevice> pairedDevices = mBluetoothAdapter.getBondedDevices();
@@ -301,7 +308,7 @@ public class StreetActivity extends FragmentActivity implements OnStreetViewPano
             bluetoothThread = new RemoteClientThread();
             bluetoothThread.start();
 
-        //}
+        }
 
     }
 
@@ -494,6 +501,10 @@ public class StreetActivity extends FragmentActivity implements OnStreetViewPano
         rightCount = 0;
         frontCount = 0;
 
+        leftDistance = 10000;
+        rightDistance = 10000;
+        frontDistance = 10000;
+
         for (int i = 0; i < businesses.length(); i++) {
 
             JSONObject business = businesses.getJSONObject(i);
@@ -512,27 +523,97 @@ public class StreetActivity extends FragmentActivity implements OnStreetViewPano
                 LatLng hotelLocation = new LatLng(lat, lon);
 
                 double angle = findAngle (currentLocation, hotelLocation);
+                int distance = (int) Math.ceil((findDistance(currentLocation, hotelLocation) * 4)/20);
 
-                Log.i(TAG, "FOUND: " + businessName +  ", " + angle);
+                Log.i(TAG, "FOUND: " + businessName +  ", " + distance);
 
                 mCache.put(businessName, hotelLocation);
 
                 // left front right calculation
 
-                if ( (angle > currentOrientation && angle < currentOrientation + 45) || (angle > currentOrientation - 45 && angle < currentOrientation)) {
+                double diff = (angle - currentOrientation) % 360;
+
+                //if ( (angle > currentOrientation && angle < (currentOrientation + 30) % 360) || (angle > (currentOrientation - 45) % 360 && angle < currentOrientation)) {
+                if ((diff >= 0 && diff < 30) || (diff >= 330 && diff <= 360)) {
+
+                    if (frontDistance > distance) {
+                        frontDistance = distance;
+                    }
+
                     //front
                     frontCount++;
                 }
 
-                if (angle > currentOrientation + 45 && angle < currentOrientation + 120) {
+                //if (angle > (currentOrientation + 45) % 360 && angle < (currentOrientation + 120) % 360) {
+                if (diff >= 30 && diff <= 100) {
+
+                    if (rightDistance > distance) {
+                        rightDistance = distance;
+                    }
                     //right
                     rightCount++;
                 }
 
-                if (angle > currentOrientation + 180 && angle < currentOrientation + 255) {
+                if (diff >= 260 && diff <= 330) {
+
+                    if (leftDistance > distance) {
+                        leftDistance = distance;
+                    }
                     //left
                     leftCount++;
                 }
+
+
+
+            }
+
+
+            if (frontCount >= 10) {
+
+                frontCount = 9;
+
+            }
+            if (rightCount >= 10) {
+
+                rightCount = 9;
+
+            }
+
+            if (leftCount >= 10) {
+
+                leftCount = 9;
+
+            }
+
+
+            //distance
+
+            if (leftDistance > 4) {
+
+                leftDistance = 0;
+
+            } else {
+
+                leftDistance = 4 - leftDistance;
+            }
+
+
+            if (frontDistance > 4) {
+
+                frontDistance = 0;
+
+            } else {
+
+                frontDistance = 4 - frontDistance;
+            }
+
+            if (rightDistance > 4) {
+
+                rightDistance = 0;
+
+            } else {
+
+                rightDistance = 4 - rightDistance;
 
             }
 
